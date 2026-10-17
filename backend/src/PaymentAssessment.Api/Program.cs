@@ -1,5 +1,7 @@
 using PaymentAssessment.Infrastructure.Payments.TwoC2P;
+using PaymentAssessment.Infrastructure.Persistence;
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,8 +22,12 @@ builder.Services.AddHttpClient<TwoC2PClient>((sp, client) =>
     client.BaseAddress = new Uri(o.BaseUrl);
     client.Timeout = TimeSpan.FromSeconds(10);
 });
+var mySql = builder.Configuration.GetConnectionString("MySql")!;
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseMySql(mySql, new MySqlServerVersion(new Version(8, 4, 0))));
 
 var app = builder.Build();
+app.Services.ApplyMigrations();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

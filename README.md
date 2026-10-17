@@ -39,7 +39,20 @@ cp backend/src/PaymentAssessment.Api/appsettings.Development.example.json \
   Docker creates an empty folder in its place.
 - The file is git-ignored; never commit it.
 
-### 2. Expose the API for 2C2P notifications
+### 2. Configure database credentials
+
+```bash
+cp .env.example .env
+```
+
+- Set `MYSQL_USER`, `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD` in `.env` (git-ignored).
+  Compose refuses to start without them.
+- For `dotnet run` outside Docker, put the same user and password in the `MySql`
+  connection string in `appsettings.Development.json`; .NET does not read `.env`.
+- MySQL reads these only when its volume is first created. After changing them, run
+  `docker compose down -v`.
+
+### 3. Expose the API for 2C2P notifications
 
 2C2P must reach `BackendReturnUrl`, so expose the API with a tunnel (ngrok shown; any
 tunnel works):
