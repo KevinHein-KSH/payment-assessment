@@ -2,12 +2,26 @@ using PaymentAssessment.Infrastructure.Payments.TwoC2P;
 using PaymentAssessment.Infrastructure.Persistence;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
+using StackExchange.Redis;
+using PaymentAssessment.Application.Caching;
+using PaymentAssessment.Application.Lookups;
+using PaymentAssessment.Infrastructure.Caching;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
+var redis = builder.Configuration.GetConnectionString("Redis")!;
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    ConnectionMultiplexer.Connect($"{redis},abortConnect=false"));
+builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+builder.Services.AddScoped<ILookupRepository, LookupRepository>();
+builder.Services.AddScoped<LookupService>();
 
-builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
