@@ -97,6 +97,7 @@ Frontend:
 
 ```bash
 cd frontend
+cp .env.example .env.local   # sets NEXT_PUBLIC_API_BASE_URL (default http://localhost:5080)
 npm run dev
 ```
 

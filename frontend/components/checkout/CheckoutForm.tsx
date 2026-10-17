@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Customer, CustomerCard, Product } from "@/lib/types";
 import PaymentMethodOptions from "./PaymentMethodOptions";
 import PaymentSummary from "./PaymentSummary";
@@ -8,26 +8,39 @@ import PaymentSummary from "./PaymentSummary";
 interface CheckoutFormProps {
   customers: Customer[];
   products: Product[];
-  cardsByCustomerId: Record<number, CustomerCard[]>;
 }
 
 const selectClass =
   "mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600";
 
-export default function CheckoutForm({ customers, products, cardsByCustomerId }: CheckoutFormProps) {
+export default function CheckoutForm({
+  customers,
+  products,
+}: CheckoutFormProps) {
   const [customerId, setCustomerId] = useState(customers[0].id);
   const [productId, setProductId] = useState(products[0].id);
+  const [cards, setCards] = useState<CustomerCard[]>([]);
   // null means "Pay with a new payment method"
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
 
   const customer = customers.find((c) => c.id === customerId) ?? customers[0];
   const product = products.find((p) => p.id === productId) ?? products[0];
-  const cards = cardsByCustomerId[customerId] ?? [];
 
   function handleCustomerChange(id: number) {
     setCustomerId(id);
     setSelectedCardId(null);
   }
+
+  useEffect(() => {
+    async function fetchCards() {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/customers/${customerId}/cards`,
+      );
+      if (!res.ok) return;
+      setCards(await res.json());
+    }
+    fetchCards();
+  }, [customerId]);
 
   return (
     <div className="space-y-6">

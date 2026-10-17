@@ -1,60 +1,6 @@
-import type {
-  Customer,
-  CustomerCard,
-  Product,
-  TransactionDetails,
-  TransactionStatus,
-} from "./types";
+import type { TransactionDetails, TransactionStatus } from "./types";
 
-export const mockCustomers: Customer[] = [
-  { id: 1, firstName: "Alice", lastName: "Tan", email: "alice.tan@example.com" },
-  { id: 2, firstName: "Ben", lastName: "Lim", email: "ben.lim@example.com" },
-  { id: 3, firstName: "Chloe", lastName: "Ng", email: "chloe.ng@example.com" },
-];
-
-export const mockProducts: Product[] = [
-  {
-    id: 1,
-    name: "Single Class Pass",
-    description: "One drop-in class",
-    price: 25.0,
-    currency: "SGD",
-    paymentType: "OneTime",
-  },
-  {
-    id: 2,
-    name: "10-Class Pack",
-    description: "Ten classes, valid for 3 months",
-    price: 220.0,
-    currency: "SGD",
-    paymentType: "OneTime",
-  },
-  {
-    id: 3,
-    name: "Monthly Membership",
-    description: "Unlimited classes, billed monthly",
-    price: 149.0,
-    currency: "SGD",
-    paymentType: "Recurring",
-  },
-  {
-    id: 4,
-    name: "Annual Membership",
-    description: "Unlimited classes, billed yearly",
-    price: 1490.0,
-    currency: "SGD",
-    paymentType: "Recurring",
-  },
-];
-
-// Only customer 1 has saved cards; the others show just "Pay with a new payment method".
-export const mockCardsByCustomerId: Record<number, CustomerCard[]> = {
-  1: [
-    { id: 1, maskedCardNo: "411111XXXXXX1111" },
-    { id: 2, maskedCardNo: "512345XXXXXX2346" },
-  ],
-};
-
+// Result page only; removed once /result reads GET /api/transactions/{invoiceNo} (Phase 3).
 export const mockTransactions: Record<TransactionStatus, TransactionDetails> = {
   Succeeded: {
     invoiceNo: "INV20261017000101",
