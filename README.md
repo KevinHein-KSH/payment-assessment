@@ -26,6 +26,39 @@ Project references: `Application → Domain`, `Infrastructure → Application`,
 - .NET SDK 8.0
 - Node.js 20 or later
 
+## Local setup
+
+### 1. Configure 2C2P credentials
+
+Copy the example settings file:
+
+```bash
+cp backend/src/PaymentAssessment.Api/appsettings.Development.example.json \
+   backend/src/PaymentAssessment.Api/appsettings.Development.json
+```
+
+- Fill in the Singapore sandbox merchant ID and secret key from
+  https://developer.2c2p.com/docs/sandbox.
+- Do this before `docker compose up`: compose mounts this file, and if it's missing
+  Docker creates an empty folder in its place.
+- The file is git-ignored; never commit it.
+
+### 2. Expose the API for 2C2P notifications
+
+2C2P must reach `BackendReturnUrl`, so expose the API with a tunnel (ngrok shown; any
+tunnel works):
+
+```bash
+ngrok http 5080 --url https://<your-ngrok-domain>
+```
+
+Then set in `appsettings.Development.json` under `TwoC2P`:
+
+```json
+"BackendReturnUrl": "https://<your-ngrok-domain>/api/payments/2c2p/notification",
+"FrontendReturnUrl": "http://localhost:3000/result"
+```
+
 ## Build
 
 ```bash

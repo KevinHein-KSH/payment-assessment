@@ -1,0 +1,5 @@
+**/bin/
+**/obj/
+
+# Local secrets: mounted read-only at runtime by compose, never baked into the image
+**/appsettings.Development.json
