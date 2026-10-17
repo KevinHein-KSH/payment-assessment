@@ -2,10 +2,6 @@
 
 Checkout application with a .NET 8 Web API backend and a Next.js frontend.
 
-> **Status: project skeleton only.** No application code yet — no database, cache or
-> payment-provider integration is wired up. Setup steps, architecture notes and
-> implementation decisions will be filled in as the project is built.
-
 ## Structure
 
 ```text
@@ -78,8 +74,8 @@ cd backend/src/PaymentAssessment.Api
 dotnet run --launch-profile http
 ```
 
-- API: http://localhost:5253
-- Swagger UI: http://localhost:5253/swagger
+- API: http://localhost:5080
+- Swagger UI: http://localhost:5080/swagger
 
 The `https` profile serves https://localhost:7035 and needs a trusted local
 certificate first (`dotnet dev-certs https --trust`).
