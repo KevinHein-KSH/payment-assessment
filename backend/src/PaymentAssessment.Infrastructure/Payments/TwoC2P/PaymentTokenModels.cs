@@ -24,3 +24,16 @@ public record TwoC2PEnvelope(
     [property: JsonPropertyName("payload")] string? Payload,
     [property: JsonPropertyName("respCode")] string? RespCode,
     [property: JsonPropertyName("respDesc")] string? RespDesc);
+
+/// <summary>Decoded backend notification JWT payload (docs/05, Backend notification). Fields beyond these are ignored.</summary>
+public record NotificationPayload(
+    [property: JsonPropertyName("invoiceNo")] string InvoiceNo,
+    // 2C2P's sample sends amount as a string ("230.87"); accept both forms
+    [property: JsonPropertyName("amount"), JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal Amount,
+    [property: JsonPropertyName("currencyCode")] string CurrencyCode,
+    [property: JsonPropertyName("respCode")] string RespCode,
+    [property: JsonPropertyName("respDesc")] string RespDesc,
+    [property: JsonPropertyName("channelCode")] string? ChannelCode,
+    [property: JsonPropertyName("accountNo")] string? AccountNo,
+    [property: JsonPropertyName("tranRef")] string? TranRef,
+    [property: JsonPropertyName("customerToken")] string? CustomerToken);

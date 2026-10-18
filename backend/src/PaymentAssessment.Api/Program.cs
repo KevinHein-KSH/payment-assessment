@@ -1,12 +1,15 @@
 using PaymentAssessment.Infrastructure.Payments.TwoC2P;
 using PaymentAssessment.Infrastructure.Persistence;
+using PaymentAssessment.Infrastructure.Caching;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 using StackExchange.Redis;
 using PaymentAssessment.Application.Caching;
 using PaymentAssessment.Application.Lookups;
-using PaymentAssessment.Infrastructure.Caching;
+using PaymentAssessment.Application.Checkout;
+using PaymentAssessment.Application.Transactions;
+using PaymentAssessment.Application.Payments;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +24,9 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(
 builder.Services.AddSingleton<ICacheService, RedisCacheService>();
 builder.Services.AddScoped<ILookupRepository, LookupRepository>();
 builder.Services.AddScoped<LookupService>();
+builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+builder.Services.AddScoped<CheckoutService>();
+builder.Services.AddScoped<NotificationService>();
 
 // shortcut: only the local Next.js dev origin is allowed; move to config if the frontend is deployed
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
@@ -34,7 +40,7 @@ builder.Services.AddOptions<TwoC2POptions>()
                 .ValidateDataAnnotations()
                 .ValidateOnStart();
 
-builder.Services.AddHttpClient<TwoC2PClient>((sp, client) =>
+builder.Services.AddHttpClient<IPaymentProvider, TwoC2PPaymentProvider>((sp, client) =>
 {
     var o = sp.GetRequiredService<IOptions<TwoC2POptions>>().Value;
     client.BaseAddress = new Uri(o.BaseUrl);
@@ -63,3 +69,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+
+// Lets WebApplicationFactory<Program> in the test project reach the entry point
+public partial class Program;
