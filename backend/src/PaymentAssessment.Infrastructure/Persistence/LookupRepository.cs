@@ -49,4 +49,11 @@ public class LookupRepository(AppDbContext db) : ILookupRepository
             return false;
         }
     }
+
+    // Lookup and ownership check in one query. Not cached: the cards cache holds masked numbers only, never tokens.
+    public Task<string?> GetCustomerTokenAsync(int customerId, int cardId, CancellationToken ct)
+        => db.CustomerCards.AsNoTracking()
+            .Where(c => c.Id == cardId && c.CustomerId == customerId)
+            .Select(c => (string?)c.CustomerToken)
+            .FirstOrDefaultAsync(ct);
 }

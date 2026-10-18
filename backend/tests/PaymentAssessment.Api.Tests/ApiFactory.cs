@@ -71,6 +71,20 @@ public class ApiFactory : WebApplicationFactory<Program>
                                                       && (customerToken == null || c.CustomerToken == customerToken));
     }
 
+    /// <summary>Inserts a saved card straight into the DB and returns its id (the API only saves cards from notifications).</summary>
+    public async Task<int> SeedCardAsync(int customerId, string customerToken)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var card = new CustomerCard
+        {
+            CustomerId = customerId, CustomerToken = customerToken, MaskedCardNo = "400000XXXXXX0002", CreatedAt = DateTime.UtcNow
+        };
+        db.CustomerCards.Add(card);
+        await db.SaveChangesAsync();
+        return card.Id;
+    }
+
     /// <summary>Removes a test card and its cached list, so test cards never show up in the demo's saved-card list.</summary>
     public async Task DeleteCardAsync(int customerId, string customerToken)
     {

@@ -9,6 +9,12 @@ public enum PaymentStatus { Succeeded, Failed, Pending, NotFound }
 /// <summary>Result of a Payment Token request. RedirectUrl is the hosted page (2C2P webPaymentUrl).</summary>
 public record PaymentTokenResult(bool Succeeded, string RespCode, string RespDesc, string? PaymentToken, string? RedirectUrl);
 
+/// <summary>What Do Payment asks for next. Never proof of success: Completed still needs Payment Inquiry (docs/05).</summary>
+public enum DoPaymentOutcome { Redirect3ds, Completed, Failed }
+
+/// <summary>Result of Do Payment for a saved card. RedirectUrl is the 3DS page when Outcome is Redirect3ds.</summary>
+public record DoPaymentResult(DoPaymentOutcome Outcome, string RespCode, string RespDesc, string? RedirectUrl);
+
 /// <summary>A verified backend notification or Payment Inquiry answer. AccountNo is already masked by the provider.</summary>
 public record PaymentNotification(
     string InvoiceNo,

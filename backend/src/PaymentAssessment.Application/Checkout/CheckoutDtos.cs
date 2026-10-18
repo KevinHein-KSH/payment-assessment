@@ -9,7 +9,7 @@ public record CheckoutRequest(int CustomerId, int ProductId, int? CustomerCardId
 public record CheckoutResponse(string InvoiceNo, TransactionStatus Status, string? RedirectUrl);
 
 /// <summary>Tells the controller which status code to return (same pattern as NotificationOutcome).</summary>
-public enum CheckoutOutcome { Ok, NotFound, InProgress }
+public enum CheckoutOutcome { Ok, NotFound, InProgress, CardNotFound }
 
 /// <summary>Response is set only when Outcome is Ok (a new checkout or a replay of the same Idempotency-Key).</summary>
 public record CheckoutResult(CheckoutOutcome Outcome, CheckoutResponse? Response = null);

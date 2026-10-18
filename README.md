@@ -122,6 +122,9 @@ npm run dev
 
    For a **Recurring** product (Monthly or Annual Membership) the hosted page offers card only;
    tick the save-card option to save the card for that customer.
+   **Saved card:** pick a customer with a saved card, select it instead of "Pay with a new payment
+   method", and click **Checkout**. There is no hosted page; the browser goes straight to the Result page
+   (or to the 3DS page first if the bank asks for it).
 3. 2C2P returns the browser to the Result page, which reads the status from our database and
    polls every 3 seconds until the backend notification arrives.
 4. On success, **Back to checkout** keeps the customer selected, so a newly saved card is listed.
@@ -137,7 +140,7 @@ the database login.
 ```bash
 docker compose up -d mysql redis
 cd backend
-dotnet test PaymentAssessment.sln                                            # all 25 tests
+dotnet test PaymentAssessment.sln                                            # all 30 tests
 dotnet test PaymentAssessment.sln --filter "FullyQualifiedName~IdempotencyTests"  # idempotency + concurrency
 ```
 
@@ -147,6 +150,7 @@ dotnet test PaymentAssessment.sln --filter "FullyQualifiedName~IdempotencyTests"
 | `RedisLockTests` | A held lock blocks a second owner; an expired owner can't release the next owner's lock |
 | `NotificationTests` | Signature check, amount/currency check, success/failure/in-progress, duplicate notifications, currency-converted payloads; a tokenized notification saves the card once and refreshes the cached card list; an empty `customerToken` saves no card |
 | `RecurringCheckoutTests` | Recurring products request a saved card (card only + tokenize), OneTime products don't |
+| `SavedCardCheckoutTests` | Saved-card payment confirmed by Payment Inquiry; Do Payment `2000` with a declined Inquiry ends Failed; another customer's card → 404 with nothing written; 3DS returns the 3DS URL and Inquiry confirms on return; a retry never charges the card twice |
 | `InquiryFallbackTests` | A Pending hosted payment that Inquiry reports as cancelled becomes Failed with the reason; one Inquiry can't find stays Pending |
 | `CheckoutValidationTests` | Missing `Idempotency-Key`, unknown customer or product |
 
@@ -157,12 +161,12 @@ dotnet test PaymentAssessment.sln --filter "FullyQualifiedName~IdempotencyTests"
 | GET | `/api/customers` | Seeded customers (cached) |
 | GET | `/api/products` | Seeded products (cached) |
 | GET | `/api/customers/{id}/cards` | A customer's saved cards, masked only (cached) |
-| POST | `/api/checkout` | Header `Idempotency-Key`; body `customerId`, `productId`. Returns `invoiceNo`, `status`, `redirectUrl` |
+| POST | `/api/checkout` | Header `Idempotency-Key`; body `customerId`, `productId`, optional `customerCardId`. Returns `invoiceNo`, `status`, `redirectUrl` (hosted page or 3DS; null when a saved-card payment needs no redirect) |
 | POST | `/api/payments/2c2p/notification` | 2C2P backend notification (`backendReturnUrl`) |
 | GET | `/api/transactions/{invoiceNo}` | Status and details for the Result page, never cached |
 
 Errors use RFC 7807 Problem Details: 400 missing key, 404 unknown customer, product or invoice,
-409 a checkout with the same key is already running.
+or a saved card that isn't this customer's, 409 a checkout with the same key is already running.
 
 ## How it works
 
@@ -187,6 +191,23 @@ Errors use RFC 7807 Problem Details: 400 missing key, 404 unknown customer, prod
    because the customer may still be paying.
 6. Only a verified notification or a verified Payment Inquiry marks a payment Succeeded;
    the browser redirect never does.
+
+### Payment flow (saved card)
+
+1. `POST /api/checkout` with `customerCardId` first checks that the card belongs to the customer
+   (one query; another customer's card → 404 before anything is written).
+2. Payment Token with `paymentChannel: ["CC"]`, `customerToken: [token]`, `customerTokenOnly: true`,
+   `request3DS: "N"`. 2C2P still returns a `webPaymentUrl`; it is never stored, so a replay can't send
+   the customer to the hosted page.
+3. **Do Payment** (plain JSON, not a JWT) charges the card:
+   - `2000` "completed" is **not** success: the same request calls Payment Inquiry and applies the answer
+     (amount check, `WHERE status = 'Pending'`). Usually the response is already Succeeded or Failed.
+   - `1001` returns the 3DS URL as `redirectUrl` and stores it, so when the browser returns to the Result
+     page the Inquiry fallback confirms the payment.
+   - Anything else → Failed with 2C2P's reason.
+4. A 2C2P notification for the same invoice may also arrive; both write only `WHERE status = 'Pending'`.
+5. If the request dies after Do Payment, the row is Pending with no redirect URL. The retry takes the
+   interrupted-request path (Payment Inquiry) and never calls Do Payment again.
 
 ### Idempotency and locking
 
@@ -242,6 +263,9 @@ All 2C2P details (JWT signing, field names, response codes, currency handling) l
   card for two customers, so each customer gets their own `customer_card` row for it.
 - **Cancel (sandbox finding):** a cancel on the hosted page sends no backend notification; Payment
   Inquiry then returns `0003 "Customer Cancellation"`. Hence the Result-page Inquiry fallback.
+- **Saved-card sandbox run:** Do Payment with `request3DS: "N"` returned `2000`, and Inquiry `0000` in
+  the notification's shape. The 3DS (`1001`) path is covered by a test, not by a sandbox run.
+- **Another customer's card gets 404, not 403**, so the API doesn't confirm that the card id exists.
 - **Payment Inquiry uses `/payment/4.3/`**, matching the assessment's API version. `4.5` returns
   `channelCode: "CC"` instead of the card brand.
 - **Money** is `DECIMAL(12,2)`. No card number, CVV or expiry is ever stored; only masked numbers

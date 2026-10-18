@@ -51,7 +51,7 @@ public class TransactionRepository(AppDbContext db) : ITransactionRepository
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task SetPaymentTokenAsync(long id, string paymentToken, string redirectUrl, CancellationToken ct)
+    public async Task SetPaymentTokenAsync(long id, string paymentToken, string? redirectUrl, CancellationToken ct)
     {
         await db.PaymentTransactions
             .Where(t => t.Id == id)

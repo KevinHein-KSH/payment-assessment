@@ -6,7 +6,7 @@ using PaymentAssessment.Domain.Entities;
 using PaymentAssessment.Domain.Enums;
 
 namespace PaymentAssessment.Application.Checkout;
-// Not in Phase 4: saved card / customerCardId (Phase 6).
+
 public class CheckoutService
 {
     private ILookupRepository LookupRepository { get; }
@@ -37,6 +37,15 @@ public class CheckoutService
         if (product is null)
             return new CheckoutResult(CheckoutOutcome.NotFound);
 
+        // Saved card: it must belong to this customer (docs/02)
+        string? customerToken = null;
+        if (request.CustomerCardId is int cardId)
+        {
+            customerToken = await LookupRepository.GetCustomerTokenAsync(request.CustomerId, cardId, ct);
+            if (customerToken is null)
+                return new CheckoutResult(CheckoutOutcome.CardNotFound);
+        }
+
         // Gate 2: one request per key at a time, across all API instances. Released when this method ends.
         await using var lockHandle = await Lock.TryAcquireAsync($"lock:checkout:{idempotencyKey}", TimeSpan.FromSeconds(60), ct);
         if (lockHandle is null)
@@ -66,8 +75,13 @@ public class CheckoutService
         if (!await TransactionRepository.AddAsync(transaction, ct))
             return new CheckoutResult(CheckoutOutcome.InProgress);
 
+        // A saved card is already saved: only a Recurring product paid with a new card asks to tokenize
         var result = await PaymentProvider.CreatePaymentTokenAsync(invoiceNo, product.Name, product.Price, product.Currency,
-            saveCard: product.PaymentType == PaymentType.Recurring, ct);
+            saveCard: customerToken is null && product.PaymentType == PaymentType.Recurring, customerToken, ct);
+
+        // Before the hosted-page branch: a saved-card token also returns a webPaymentUrl, which must never be stored
+        if (result.Succeeded && customerToken is not null)
+            return await PaySavedCardAsync(transaction, result.PaymentToken!, customerToken, ct);
 
         if (result.Succeeded)
         {
@@ -77,6 +91,31 @@ public class CheckoutService
 
         await TransactionRepository.MarkFailedAsync(invoiceNo, result.RespCode, result.RespDesc, ct);
         return new CheckoutResult(CheckoutOutcome.Ok, new CheckoutResponse(invoiceNo, TransactionStatus.Failed, null));
+    }
+
+    // docs/05 Saved-card flow steps 2–5: Do Payment, then Payment Inquiry. Do Payment's 2000 alone is never success.
+    private async Task<CheckoutResult> PaySavedCardAsync(PaymentTransaction transaction, string paymentToken,
+        string customerToken, CancellationToken ct)
+    {
+        // A crash after Do Payment leaves Pending with no redirect_url, so the retry asks Inquiry and never charges twice
+        var payment = await PaymentProvider.DoPaymentAsync(paymentToken, customerToken, transaction.InvoiceNo, ct);
+
+        switch (payment.Outcome)
+        {
+            case DoPaymentOutcome.Redirect3ds:
+                // redirect_url set: on return from 3DS the Result-page Inquiry fallback confirms the payment
+                await TransactionRepository.SetPaymentTokenAsync(transaction.Id, paymentToken, payment.RedirectUrl, ct);
+                return new CheckoutResult(CheckoutOutcome.Ok,
+                    new CheckoutResponse(transaction.InvoiceNo, TransactionStatus.Pending, payment.RedirectUrl));
+            case DoPaymentOutcome.Completed:
+                await TransactionRepository.SetPaymentTokenAsync(transaction.Id, paymentToken, null, ct);
+                return await RecoverInterruptedAsync(transaction, ct); // Inquiry, amount check, WHERE status = 'Pending'
+            default:
+                await TransactionRepository.SetPaymentTokenAsync(transaction.Id, paymentToken, null, ct);
+                await TransactionRepository.MarkFailedAsync(transaction.InvoiceNo, payment.RespCode, payment.RespDesc, ct);
+                return new CheckoutResult(CheckoutOutcome.Ok,
+                    new CheckoutResponse(transaction.InvoiceNo, TransactionStatus.Failed, null));
+        }
     }
 
     private async Task<CheckoutResult> ReplayAsync(PaymentTransaction existing, CancellationToken ct)

@@ -13,4 +13,7 @@ public interface ILookupRepository
 
     /// <summary>Inserts a saved card. Returns false when (customer_id, customer_token) already exists.</summary>
     Task<bool> AddCardAsync(int customerId, string customerToken, string maskedCardNo, CancellationToken ct);
+
+    /// <summary>The card's customerToken, or null when the card doesn't exist or belongs to another customer (docs/02).</summary>
+    Task<string?> GetCustomerTokenAsync(int customerId, int cardId, CancellationToken ct);
 }

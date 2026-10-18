@@ -13,7 +13,38 @@ public record PaymentTokenRequest(
     [property: JsonPropertyName("backendReturnUrl")] string BackendReturnUrl,
     // Recurring only; null fields are left out of the JSON so OneTime requests don't change
     [property: JsonPropertyName("paymentChannel"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? PaymentChannel = null,
-    [property: JsonPropertyName("tokenize"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Tokenize = null);
+    [property: JsonPropertyName("tokenize"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Tokenize = null,
+    // Saved card only (docs/05 "Saved card" row)
+    [property: JsonPropertyName("customerToken"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? CustomerToken = null,
+    [property: JsonPropertyName("customerTokenOnly"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CustomerTokenOnly = null,
+    [property: JsonPropertyName("request3DS"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Request3DS = null);
+
+/// <summary>Do Payment request: plain JSON, not a JWT (docs/05). Sandbox-verified 2026-10-18 with a saved customerToken.</summary>
+public record DoPaymentRequest(
+    [property: JsonPropertyName("paymentToken")] string PaymentToken,
+    [property: JsonPropertyName("locale")] string Locale,
+    [property: JsonPropertyName("responseReturnUrl")] string ResponseReturnUrl, // where the browser lands after 3DS
+    [property: JsonPropertyName("payment")] DoPaymentPayment Payment);
+
+public record DoPaymentPayment(
+    [property: JsonPropertyName("code")] DoPaymentCode Code,
+    [property: JsonPropertyName("data")] DoPaymentData Data);
+
+public record DoPaymentCode([property: JsonPropertyName("channelCode")] string ChannelCode);
+
+public record DoPaymentData([property: JsonPropertyName("customerToken")] string CustomerToken);
+
+/// <summary>
+/// Do Payment reply (plain JSON). Sandbox 2026-10-18: {"invoiceNo":"…","channelCode":"CC","respCode":"2000",
+/// "respDesc":"Transaction is completed, please do payment inquiry request for full payment information."}.
+/// On 1001, Data holds the 3DS URL (2C2P docs).
+/// </summary>
+public record DoPaymentResponse(
+    [property: JsonPropertyName("invoiceNo")] string? InvoiceNo,
+    [property: JsonPropertyName("channelCode")] string? ChannelCode,
+    [property: JsonPropertyName("respCode")] string RespCode,
+    [property: JsonPropertyName("respDesc")] string RespDesc,
+    [property: JsonPropertyName("data")] string? Data);
 
 /// <summary>Decoded Payment Token response JWT payload from 2C2P.</summary>
 public record PaymentTokenResponse(

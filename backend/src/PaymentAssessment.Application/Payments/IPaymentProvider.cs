@@ -5,10 +5,15 @@ public interface IPaymentProvider
 {
     /// <summary>
     /// Requests a hosted-page token for a new payment method. saveCard = true (Recurring) limits the page to cards
-    /// and asks the provider to tokenize, so the notification carries a CustomerToken. Phase 6 adds saved-card parameters.
+    /// and asks the provider to tokenize, so the notification carries a CustomerToken. customerToken set = pay with that
+    /// saved card (no hosted page; follow with <see cref="DoPaymentAsync"/>).
     /// </summary>
     Task<PaymentTokenResult> CreatePaymentTokenAsync(
-        string invoiceNo, string description, decimal amount, string currency, bool saveCard, CancellationToken ct);
+        string invoiceNo, string description, decimal amount, string currency, bool saveCard, string? customerToken,
+        CancellationToken ct);
+
+    /// <summary>Charges a saved card with the Payment Token from <see cref="CreatePaymentTokenAsync"/> (Direct API).</summary>
+    Task<DoPaymentResult> DoPaymentAsync(string paymentToken, string customerToken, string invoiceNo, CancellationToken ct);
 
     /// <summary>Verifies and decodes a backend notification payload. Returns null when the signature is invalid.</summary>
     Task<PaymentNotification?> VerifyNotificationAsync(string payload, CancellationToken ct);

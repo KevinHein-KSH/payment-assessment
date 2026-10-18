@@ -16,6 +16,8 @@ public class CheckoutController(CheckoutService checkout) : ControllerBase
         return result.Outcome switch
         {
             CheckoutOutcome.NotFound => Problem(statusCode: 404, title: "Unknown customer or product"),
+            // 404, not 403: don't confirm that another customer's card id exists
+            CheckoutOutcome.CardNotFound => Problem(statusCode: 404, title: "Unknown saved card for this customer"),
             CheckoutOutcome.InProgress => Problem(statusCode: 409, title: "A checkout with this Idempotency-Key is in progress"),
             _ => Ok(result.Response)
         };

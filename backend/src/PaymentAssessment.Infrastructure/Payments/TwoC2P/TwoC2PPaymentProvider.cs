@@ -11,7 +11,8 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
     private readonly TwoC2POptions _options = options.Value;
 
     public async Task<PaymentTokenResult> CreatePaymentTokenAsync(
-        string invoiceNo, string description, decimal amount, string currency, bool saveCard, CancellationToken ct = default)
+        string invoiceNo, string description, decimal amount, string currency, bool saveCard, string? customerToken,
+        CancellationToken ct = default)
     {
         var request = new PaymentTokenRequest(
             MerchantId: _options.MerchantId,
@@ -26,6 +27,15 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
         if (saveCard)
         {
             request = request with { PaymentChannel = new[] { "CC" }, Tokenize = true };
+        }
+
+        if (customerToken is not null)
+        {
+            // docs/05 "Saved card" row; sandbox 2026-10-18: 0000 here, then Do Payment returned 2000
+            request = request with
+            {
+                PaymentChannel = new[] { "CC" }, CustomerToken = new[] { customerToken }, CustomerTokenOnly = true, Request3DS = "N"
+            };
         }
 
         var jwt = TwoC2PJwt.Sign(JsonSerializer.Serialize(request), _options.SecretKey);
@@ -51,6 +61,27 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
         var r = JsonSerializer.Deserialize<PaymentTokenResponse>(decodedJson)
                 ?? throw new InvalidOperationException("2C2P payload could not be read");
         return new PaymentTokenResult(r.RespCode == "0000", r.RespCode, r.RespDesc, r.PaymentToken, r.WebPaymentUrl);
+    }
+
+    public async Task<DoPaymentResult> DoPaymentAsync(string paymentToken, string customerToken, string invoiceNo, CancellationToken ct)
+    {
+        // Plain JSON, not a JWT (docs/05); the browser comes back from 3DS to our Result page
+        var request = new DoPaymentRequest(paymentToken, "en", $"{_options.FrontendReturnUrl}/{invoiceNo}",
+            new DoPaymentPayment(new DoPaymentCode("CC"), new DoPaymentData(customerToken)));
+
+        var httpResponse = await http.PostAsJsonAsync(_options.DoPaymentPath, request, ct);
+        httpResponse.EnsureSuccessStatusCode();
+
+        var r = await httpResponse.Content.ReadFromJsonAsync<DoPaymentResponse>(cancellationToken: ct)
+            ?? throw new InvalidOperationException("2C2P returned an empty response");
+
+        var outcome = r.RespCode switch
+        {
+            "1001" => DoPaymentOutcome.Redirect3ds,
+            "2000" => DoPaymentOutcome.Completed, // not success: the caller must ask Payment Inquiry
+            _ => DoPaymentOutcome.Failed
+        };
+        return new DoPaymentResult(outcome, r.RespCode, r.RespDesc, outcome == DoPaymentOutcome.Redirect3ds ? r.Data : null);
     }
 
     public async Task<PaymentNotification?> VerifyNotificationAsync(string payload, CancellationToken ct)
