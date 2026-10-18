@@ -11,7 +11,7 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
     private readonly TwoC2POptions _options = options.Value;
 
     public async Task<PaymentTokenResult> CreatePaymentTokenAsync(
-        string invoiceNo, string description, decimal amount, string currency, CancellationToken ct = default)
+        string invoiceNo, string description, decimal amount, string currency, bool saveCard, CancellationToken ct = default)
     {
         var request = new PaymentTokenRequest(
             MerchantId: _options.MerchantId,
@@ -20,7 +20,13 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
             Amount: amount,
             CurrencyCode: currency,
             FrontendReturnUrl: $"{_options.FrontendReturnUrl}/{invoiceNo}",
-            BackendReturnUrl: _options.BackendReturnUrl);
+            BackendReturnUrl: _options.BackendReturnUrl
+        );
+
+        if (saveCard)
+        {
+            request = request with { PaymentChannel = new[] { "CC" }, Tokenize = true };
+        }
 
         var jwt = TwoC2PJwt.Sign(JsonSerializer.Serialize(request), _options.SecretKey);
 

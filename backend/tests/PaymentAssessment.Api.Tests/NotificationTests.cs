@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using PaymentAssessment.Application.Lookups;
 using PaymentAssessment.Application.Transactions;
 using PaymentAssessment.Domain.Enums;
 
@@ -16,8 +17,10 @@ public class NotificationTests(ApiFactory factory)
     private readonly HttpClient _client = factory.CreateClient();
 
     // Same field names and string amount format as 2C2P's backend response sample
-    private static object Payload(string invoiceNo, string amount = "25.00", string respCode = "0000", string respDesc = "Success") => new
+    private static object Payload(string invoiceNo, string amount = "25.00", string respCode = "0000", string respDesc = "Success",
+        string customerToken = "") => new
     {
+        customerToken,
         merchantID = "JT01",
         invoiceNo,
         accountNo = "411111XXXXXX1111",
@@ -153,5 +156,45 @@ public class NotificationTests(ApiFactory factory)
         var saved = await factory.ReloadAsync(tx.InvoiceNo);
         Assert.Equal(TransactionStatus.Succeeded, saved.Status);
         Assert.NotEqual("4005", saved.RespCode);
+    }
+
+    [Fact]
+    public async Task Tokenized_notification_saves_the_card_once_and_refreshes_the_card_list()
+    {
+        var tx = await factory.SeedPendingAsync();
+        var token = "TEST" + Guid.NewGuid().ToString("N")[..16];
+        var cardsUrl = $"/api/customers/{tx.CustomerId}/cards";
+        try
+        {
+            await _client.GetAsync(cardsUrl); // fill the cache, so the list below proves the invalidation
+            var body = ApiFactory.NotificationBody(Payload(tx.InvoiceNo, customerToken: token));
+
+            var first = await _client.PostAsJsonAsync(Url, body);
+            var duplicate = await _client.PostAsJsonAsync(Url, body);
+
+            Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, duplicate.StatusCode);
+            Assert.Equal(TransactionStatus.Succeeded, (await factory.ReloadAsync(tx.InvoiceNo)).Status);
+            Assert.Equal(1, await factory.CountCardsAsync(tx.CustomerId, token));
+            var cards = await _client.GetFromJsonAsync<List<CustomerCardDto>>(cardsUrl, Json);
+            Assert.Contains(cards!, c => c.MaskedCardNo == "411111XXXXXX1111");
+        }
+        finally
+        {
+            await factory.DeleteCardAsync(tx.CustomerId, token);
+        }
+    }
+
+    [Fact]
+    public async Task Notification_with_empty_customer_token_saves_no_card()
+    {
+        var tx = await factory.SeedPendingAsync();
+        var cardsBefore = await factory.CountCardsAsync(tx.CustomerId);
+
+        var res = await _client.PostAsJsonAsync(Url, ApiFactory.NotificationBody(Payload(tx.InvoiceNo, customerToken: "")));
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal(TransactionStatus.Succeeded, (await factory.ReloadAsync(tx.InvoiceNo)).Status);
+        Assert.Equal(cardsBefore, await factory.CountCardsAsync(tx.CustomerId));
     }
 }

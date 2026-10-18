@@ -17,10 +17,14 @@ public class FakePaymentProvider : IPaymentProvider
     /// <summary>Inquiry answer per invoiceNo; anything not listed is "2002 Transaction not found." like the sandbox.</summary>
     public ConcurrentDictionary<string, PaymentNotification> InquiryResults { get; } = new();
 
+    /// <summary>The saveCard flag each Payment Token request was sent with, by invoiceNo.</summary>
+    public ConcurrentDictionary<string, bool> SaveCardRequests { get; } = new();
+
     public async Task<PaymentTokenResult> CreatePaymentTokenAsync(
-        string invoiceNo, string description, decimal amount, string currency, CancellationToken ct)
+        string invoiceNo, string description, decimal amount, string currency, bool saveCard, CancellationToken ct)
     {
         Interlocked.Increment(ref _tokenCalls);
+        SaveCardRequests[invoiceNo] = saveCard;
         await Task.Delay(300, ct); // a slow 2C2P keeps parallel requests overlapping
         return new PaymentTokenResult(true, "0000", "Success", $"fake-token-{invoiceNo}", $"https://pay.example/{invoiceNo}");
     }

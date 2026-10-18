@@ -120,10 +120,13 @@ npm run dev
    | Mastercard, succeeds | `5555 5555 5555 4444` | `123` | any future date | `123456` |
    | Visa, declined | `4444 3333 2222 1111` | `123` | any future date | `123456` |
 
+   For a **Recurring** product (Monthly or Annual Membership) the hosted page offers card only;
+   tick the save-card option to save the card for that customer.
 3. 2C2P returns the browser to the Result page, which reads the status from our database and
    polls every 3 seconds until the backend notification arrives.
-4. On a failed payment, **Go back** returns to Checkout with the same customer and product
-   selected, ready to retry.
+4. On success, **Back to checkout** keeps the customer selected, so a newly saved card is listed.
+   On a failed or cancelled payment, **Go back** returns to Checkout with the same customer and
+   product selected, ready to retry.
 
 ## Tests
 
@@ -134,7 +137,7 @@ the database login.
 ```bash
 docker compose up -d mysql redis
 cd backend
-dotnet test PaymentAssessment.sln                                            # all 19 tests
+dotnet test PaymentAssessment.sln                                            # all 25 tests
 dotnet test PaymentAssessment.sln --filter "FullyQualifiedName~IdempotencyTests"  # idempotency + concurrency
 ```
 
@@ -142,7 +145,9 @@ dotnet test PaymentAssessment.sln --filter "FullyQualifiedName~IdempotencyTests"
 |---|---|
 | `IdempotencyTests` | 10 parallel checkouts with one key → exactly 1 row and 1 2C2P call; retry replays the same invoice without calling 2C2P; interrupted requests resolved by Payment Inquiry |
 | `RedisLockTests` | A held lock blocks a second owner; an expired owner can't release the next owner's lock |
-| `NotificationTests` | Signature check, amount/currency check, success/failure/in-progress, duplicate notifications, currency-converted payloads |
+| `NotificationTests` | Signature check, amount/currency check, success/failure/in-progress, duplicate notifications, currency-converted payloads; a tokenized notification saves the card once and refreshes the cached card list; an empty `customerToken` saves no card |
+| `RecurringCheckoutTests` | Recurring products request a saved card (card only + tokenize), OneTime products don't |
+| `InquiryFallbackTests` | A Pending hosted payment that Inquiry reports as cancelled becomes Failed with the reason; one Inquiry can't find stays Pending |
 | `CheckoutValidationTests` | Missing `Idempotency-Key`, unknown customer or product |
 
 ## API
@@ -164,13 +169,23 @@ Errors use RFC 7807 Problem Details: 400 missing key, 404 unknown customer, prod
 ### Payment flow (new payment method)
 
 1. `POST /api/checkout` validates the customer and product, inserts a **Pending** transaction,
-   and requests a Payment Token from 2C2P (JWT signed with HMAC SHA-256).
+   and requests a Payment Token from 2C2P (JWT signed with HMAC SHA-256). For a Recurring
+   product the request adds `paymentChannel: ["CC"]` and `tokenize: true`.
 2. The frontend sends the browser to the returned hosted-page URL.
 3. 2C2P POSTs a signed notification to the backend. The handler verifies the signature,
    checks the amount and currency against the stored transaction, and sets **Succeeded** or
    **Failed** with a single `UPDATE … WHERE status = 'Pending'`. That makes repeated
    notifications harmless.
-4. Only a verified notification or a verified Payment Inquiry marks a payment Succeeded;
+4. If a successful notification carries a `customerToken` (the customer ticked save-card), the
+   token and masked card number are saved to `customer_card` for that customer. The unique index
+   on `(customer_id, customer_token)` makes a repeated notification skip the insert, and the
+   customer's cached card list is cleared.
+5. **Inquiry fallback:** cancelling on the hosted page sends no notification (sandbox finding),
+   so `GET /api/transactions/{invoiceNo}` asks Payment Inquiry while the row is Pending and the
+   customer was sent to 2C2P. The answer goes through the same checks and `WHERE status = 'Pending'`
+   update as a notification; a cancel (`0003`) becomes Failed. "Not found" keeps it Pending,
+   because the customer may still be paying.
+6. Only a verified notification or a verified Payment Inquiry marks a payment Succeeded;
    the browser redirect never does.
 
 ### Idempotency and locking
@@ -200,8 +215,7 @@ is cleared once the payment is final. On the backend, each checkout passes four 
 ### Caching
 
 Customers, products and saved cards use Redis cache-aside with a 10-minute TTL. A customer's
-cards cache is cleared when a new card is saved (`LookupService.RemoveCardsCacheAsync`, wired in
-with the Recurring flow). Transaction status is never cached: the Result page always reads it
+cards cache is cleared whenever a notification saves a card (`LookupService.SaveCardAsync`). Transaction status is never cached: the Result page always reads it
 fresh.
 
 ### Provider isolation
@@ -221,6 +235,13 @@ All 2C2P details (JWT signing, field names, response codes, currency handling) l
 - **Currency conversion (sandbox finding):** with merchant `JT01`, 2C2P settles in THB and returns
   our SGD amount in `fxAmount`/`fxCurrencyCode`. The adapter compares against the amount we
   requested, whichever currency 2C2P settles in.
+- **A card is saved only from a successful notification**, and on every successful notification,
+  not only the one that changed the status: the unique index stops duplicates, and a crash between
+  marking Succeeded and saving the card can't lose it.
+- **Saved cards belong to a customer:** 2C2P returned the same `customerToken` for the same test
+  card for two customers, so each customer gets their own `customer_card` row for it.
+- **Cancel (sandbox finding):** a cancel on the hosted page sends no backend notification; Payment
+  Inquiry then returns `0003 "Customer Cancellation"`. Hence the Result-page Inquiry fallback.
 - **Payment Inquiry uses `/payment/4.3/`**, matching the assessment's API version. `4.5` returns
   `channelCode: "CC"` instead of the card brand.
 - **Money** is `DECIMAL(12,2)`. No card number, CVV or expiry is ever stored; only masked numbers
@@ -231,6 +252,8 @@ All 2C2P details (JWT signing, field names, response codes, currency handling) l
 - **Redis down:** checkouts continue without the lock and the unique index prevents duplicate
   rows and duplicate Payment Tokens. In that window, an interrupted-request recovery could
   run while the original request is still in flight.
+- **Inquiry fallback cost:** the Result page polls every 3 seconds, and each poll of a Pending
+  hosted payment makes one Inquiry call. With real traffic this would be throttled per invoice.
 - **A second payment provider** would need a `provider` column on `transaction`, so notifications
   and Inquiry reach the right provider, plus provider selection (keyed services or a small
   factory). The interfaces and neutral types are already in place.

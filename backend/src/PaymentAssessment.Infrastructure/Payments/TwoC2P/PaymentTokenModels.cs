@@ -10,7 +10,10 @@ public record PaymentTokenRequest(
     [property: JsonPropertyName("amount")] decimal Amount,
     [property: JsonPropertyName("currencyCode")] string CurrencyCode,
     [property: JsonPropertyName("frontendReturnUrl")] string FrontendReturnUrl,
-    [property: JsonPropertyName("backendReturnUrl")] string BackendReturnUrl);
+    [property: JsonPropertyName("backendReturnUrl")] string BackendReturnUrl,
+    // Recurring only; null fields are left out of the JSON so OneTime requests don't change
+    [property: JsonPropertyName("paymentChannel"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? PaymentChannel = null,
+    [property: JsonPropertyName("tokenize"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Tokenize = null);
 
 /// <summary>Decoded Payment Token response JWT payload from 2C2P.</summary>
 public record PaymentTokenResponse(

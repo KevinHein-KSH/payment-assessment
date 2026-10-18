@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatAmount, formatPaymentChannel } from "@/lib/format";
 import type { TransactionDetails } from "@/lib/types";
 
@@ -26,6 +27,13 @@ export default function SucceededResult({ transaction }: SucceededResultProps) {
           </div>
         ))}
       </dl>
+      {/* Keep the customer selected so a card saved by this payment shows up straight away */}
+      <Link
+        href={`/?customerId=${transaction.customerId}`}
+        className="mt-6 block w-full rounded-md bg-blue-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-blue-700"
+      >
+        Back to checkout
+      </Link>
     </div>
   );
 }

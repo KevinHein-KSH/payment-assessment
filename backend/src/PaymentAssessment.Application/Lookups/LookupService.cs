@@ -25,6 +25,13 @@ public class LookupService
             return null;
         return await CacheService.GetOrSetAsync($"customer:{customerId}:cards", () => LookupRepository.GetCustomerCardsAsync(customerId, ct), TimeSpan.FromMinutes(10));
     }
+    /// <summary>Saves a tokenized card once (docs/05 notification step 4) and drops the cached card list.</summary>
+    public async Task SaveCardAsync(int customerId, string customerToken, string maskedCardNo, CancellationToken ct)
+    {
+        await LookupRepository.AddCardAsync(customerId, customerToken, maskedCardNo, ct);
+        await RemoveCardsCacheAsync(customerId);
+    }
+
     public Task RemoveCardsCacheAsync(int customerId)
         => CacheService.RemoveAsync($"customer:{customerId}:cards");
 }

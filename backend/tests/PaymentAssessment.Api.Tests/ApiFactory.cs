@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using PaymentAssessment.Application.Lookups;
 using PaymentAssessment.Domain.Entities;
 using PaymentAssessment.Domain.Enums;
 using PaymentAssessment.Infrastructure.Payments.TwoC2P;
@@ -27,7 +28,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             new Dictionary<string, string?> { ["TwoC2P:SecretKey"] = TestSecret }));
     }
 
-    public async Task<PaymentTransaction> SeedPendingAsync(decimal amount = 25.00m)
+    public async Task<PaymentTransaction> SeedPendingAsync(decimal amount = 25.00m, string? redirectUrl = null)
     {
         var tx = new PaymentTransaction
         {
@@ -38,6 +39,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             Amount = amount,
             Currency = "SGD",
             Status = TransactionStatus.Pending,
+            RedirectUrl = redirectUrl,
             CreatedAt = DateTime.UtcNow
         };
         using var scope = Services.CreateScope();
@@ -59,6 +61,23 @@ public class ApiFactory : WebApplicationFactory<Program>
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         return await db.PaymentTransactions.AsNoTracking().SingleAsync(t => t.InvoiceNo == invoiceNo);
+    }
+
+    public async Task<int> CountCardsAsync(int customerId, string? customerToken = null)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.CustomerCards.CountAsync(c => c.CustomerId == customerId
+                                                      && (customerToken == null || c.CustomerToken == customerToken));
+    }
+
+    /// <summary>Removes a test card and its cached list, so test cards never show up in the demo's saved-card list.</summary>
+    public async Task DeleteCardAsync(int customerId, string customerToken)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.CustomerCards.Where(c => c.CustomerId == customerId && c.CustomerToken == customerToken).ExecuteDeleteAsync();
+        await scope.ServiceProvider.GetRequiredService<LookupService>().RemoveCardsCacheAsync(customerId);
     }
 
     /// <summary>Builds the { "payload": "&lt;JWT&gt;" } body 2C2P POSTs to backendReturnUrl.</summary>

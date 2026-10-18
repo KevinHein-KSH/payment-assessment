@@ -66,7 +66,8 @@ public class CheckoutService
         if (!await TransactionRepository.AddAsync(transaction, ct))
             return new CheckoutResult(CheckoutOutcome.InProgress);
 
-        var result = await PaymentProvider.CreatePaymentTokenAsync(invoiceNo, product.Name, product.Price, product.Currency, ct);
+        var result = await PaymentProvider.CreatePaymentTokenAsync(invoiceNo, product.Name, product.Price, product.Currency,
+            saveCard: product.PaymentType == PaymentType.Recurring, ct);
 
         if (result.Succeeded)
         {

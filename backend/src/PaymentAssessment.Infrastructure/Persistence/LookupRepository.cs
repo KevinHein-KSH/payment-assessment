@@ -1,5 +1,6 @@
 using PaymentAssessment.Application.Lookups;
 using Microsoft.EntityFrameworkCore;
+using PaymentAssessment.Domain.Entities;
 
 
 namespace PaymentAssessment.Infrastructure.Persistence;
@@ -24,4 +25,28 @@ public class LookupRepository(AppDbContext db) : ILookupRepository
 
     public Task<bool> CustomerExistsAsync(int customerId, CancellationToken ct)
         => db.Customers.AnyAsync(c => c.Id == customerId, ct);
+
+    public async Task<bool> AddCardAsync(int customerId, string customerToken, string maskedCardNo, CancellationToken ct)
+    {
+        // Common duplicate (2C2P resending a notification) without an EF error log; the catch below covers the race
+        if (await db.CustomerCards.AnyAsync(c => c.CustomerId == customerId && c.CustomerToken == customerToken, ct))
+            return false;
+
+        db.CustomerCards.Add(new CustomerCard
+        {
+            CustomerId = customerId,
+            CustomerToken = customerToken,
+            MaskedCardNo = maskedCardNo,
+            CreatedAt = DateTime.UtcNow
+        });
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is MySqlConnector.MySqlException { ErrorCode: MySqlConnector.MySqlErrorCode.DuplicateKeyEntry })
+        {
+            return false;
+        }
+    }
 }
