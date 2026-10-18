@@ -7,10 +7,23 @@ namespace PaymentAssessment.Infrastructure.Persistence;
 
 public class TransactionRepository(AppDbContext db) : ITransactionRepository
 {
-    public async Task AddAsync(PaymentTransaction transaction, CancellationToken ct)
+    public async Task<bool> AddAsync(PaymentTransaction transaction, CancellationToken ct)
     {
         db.PaymentTransactions.Add(transaction);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is MySqlConnector.MySqlException { ErrorCode: MySqlConnector.MySqlErrorCode.DuplicateKeyEntry })
+        {
+            return false;
+        }
+    }
+
+    public async Task<PaymentTransaction?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct)
+    {
+        return await db.PaymentTransactions.AsNoTracking().FirstOrDefaultAsync(t => t.IdempotencyKey == idempotencyKey, ct);
     }
 
     public async Task<PaymentTransaction?> GetByInvoiceNoAsync(string invoiceNo, CancellationToken ct)

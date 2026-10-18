@@ -54,23 +54,50 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
             var json = await TwoC2PJwt.VerifyAndDecodeAsync(payload, _options.SecretKey);
             var p = JsonSerializer.Deserialize<NotificationPayload>(json)
                 ?? throw new InvalidOperationException("2C2P payload could not be read");
-            // Report what we requested, not what 2C2P settled in: the sandbox converts SGD to THB and keeps our SGD in fx*
-            var converted = !string.IsNullOrEmpty(p.FxCurrencyCode) && p.FxAmount is not null;
-            return new PaymentNotification(
-                InvoiceNo: p.InvoiceNo,
-                Amount: converted ? p.FxAmount!.Value : p.Amount,
-                CurrencyCode: converted ? p.FxCurrencyCode! : p.CurrencyCode,
-                RespCode: p.RespCode,
-                RespDesc: p.RespDesc,
-                ChannelCode: p.ChannelCode,
-                AccountNo: p.AccountNo,
-                TranRef: p.TranRef,
-                CustomerToken: p.CustomerToken
-            );
+            return ToPaymentNotification(p, p.InvoiceNo ?? "");
         }
         catch (SecurityTokenException)
         {
             return null;
         }
+    }
+
+    public async Task<PaymentNotification> InquireAsync(string invoiceNo, CancellationToken ct)
+    {
+        var request = new { merchantID = _options.MerchantId, invoiceNo, locale = "en" };
+        var jwt = TwoC2PJwt.Sign(JsonSerializer.Serialize(request), _options.SecretKey);
+
+        var httpResponse = await http.PostAsJsonAsync(_options.PaymentInquiryPath, new { payload = jwt }, ct);
+        httpResponse.EnsureSuccessStatusCode();
+
+        var envelope = await httpResponse.Content.ReadFromJsonAsync<TwoC2PEnvelope>(cancellationToken: ct)
+            ?? throw new InvalidOperationException("2C2P returned an empty response");
+
+        if (envelope.Payload is null)
+            return new PaymentNotification(invoiceNo, 0m, "", envelope.RespCode ?? "", envelope.RespDesc ?? "", null, null, null, null);
+
+        // Our own outbound call: a bad signature here is an error, so let VerifyAndDecodeAsync throw
+        var decodedJson = await TwoC2PJwt.VerifyAndDecodeAsync(envelope.Payload, _options.SecretKey);
+        var p = JsonSerializer.Deserialize<NotificationPayload>(decodedJson)
+            ?? throw new InvalidOperationException("2C2P payload could not be read");
+        // Not found ("2002") comes back with invoiceNo null and amount 0, so keep the invoice we asked about
+        return ToPaymentNotification(p, invoiceNo);
+    }
+
+    // Inquiry replies have the notification's shape (docs/05, sandbox-verified), so both map the same way
+    private static PaymentNotification ToPaymentNotification(NotificationPayload p, string invoiceNo)
+    {
+        // Report what we requested, not what 2C2P settled in: the sandbox converts SGD to THB and keeps our SGD in fx*
+        var converted = !string.IsNullOrEmpty(p.FxCurrencyCode) && p.FxAmount is not null;
+        return new PaymentNotification(
+            InvoiceNo: p.InvoiceNo ?? invoiceNo,
+            Amount: converted ? p.FxAmount!.Value : p.Amount,
+            CurrencyCode: converted ? p.FxCurrencyCode! : p.CurrencyCode ?? "",
+            RespCode: p.RespCode,
+            RespDesc: p.RespDesc,
+            ChannelCode: p.ChannelCode,
+            AccountNo: p.AccountNo,
+            TranRef: p.TranRef,
+            CustomerToken: p.CustomerToken);
     }
 }

@@ -20,6 +20,9 @@ public class TwoC2POptions
     public string PaymentTokenPath { get; set; } = string.Empty;
 
     [Required]
+    public string PaymentInquiryPath { get; set; } = string.Empty;
+
+    [Required]
     public string BackendReturnUrl { get; set; } = string.Empty;
 
     [Required]

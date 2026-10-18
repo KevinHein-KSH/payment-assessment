@@ -4,7 +4,10 @@ namespace PaymentAssessment.Application.Transactions;
 
 public interface ITransactionRepository
 {
-    Task AddAsync(PaymentTransaction transaction, CancellationToken ct);
+    /// <summary>False when the idempotency key already exists (unique index): the final guard if the Redis lock expired or Redis is down.</summary>
+    Task<bool> AddAsync(PaymentTransaction transaction, CancellationToken ct);
+
+    Task<PaymentTransaction?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct);
 
     Task<PaymentTransaction?> GetByInvoiceNoAsync(string invoiceNo, CancellationToken ct);
 

@@ -8,6 +8,7 @@ import type {
   CustomerCard,
   Product,
 } from "@/lib/types";
+import { idempotencyKeyFor } from "@/lib/idempotency";
 import PaymentMethodOptions from "./PaymentMethodOptions";
 import PaymentSummary from "./PaymentSummary";
 
@@ -37,13 +38,16 @@ export default function CheckoutForm({
   const [cards, setCards] = useState<CustomerCard[]>([]);
   // null means "Pay with a new payment method"
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
-  // shortcut: one key per page load; Phase 4 (F1) keeps it in sessionStorage so a refresh reuses it
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const customer = customers.find((c) => c.id === customerId) ?? customers[0];
   const product = products.find((p) => p.id === productId) ?? products[0];
+
+  // docs/01 F1: the key exists from page load (and per purchase); handleCheckout reads the same one
+  useEffect(() => {
+    idempotencyKeyFor(customerId, productId);
+  }, [customerId, productId]);
 
   async function handleCheckout() {
     setSubmitting(true);
@@ -56,13 +60,24 @@ export default function CheckoutForm({
       };
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/checkout`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKeyFor(customerId, productId),
+        },
         body: JSON.stringify(body),
       });
+      if (res.status === 409) {
+        // Another request with this key is still running (double click, second tab): don't start a new one
+        setError("This payment is already being processed. Please wait a moment and try again.");
+        setSubmitting(false);
+        return;
+      }
       if (!res.ok) throw new Error(`Checkout returned ${res.status}`);
       const data: CheckoutResponse = await res.json();
-      // Hosted page (or 3DS later); null means go straight to our Result page. Button stays disabled while leaving.
-      window.location.href = data.redirectUrl ?? `/result/${data.invoiceNo}`;
+      // Pending → the hosted page (or 3DS later); a replayed purchase that already finished → straight to its result
+      // (docs/03). The button stays disabled while the browser leaves.
+      window.location.href =
+        data.status === "Pending" && data.redirectUrl ? data.redirectUrl : `/result/${data.invoiceNo}`;
     } catch {
       setError("Checkout failed. Please try again.");
       setSubmitting(false);

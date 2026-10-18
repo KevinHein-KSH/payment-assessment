@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import FailedResult from "./FailedResult";
 import ProcessingResult from "./ProcessingResult";
 import SucceededResult from "./SucceededResult";
+import { clearIdempotencyKey } from "@/lib/idempotency";
 import type { TransactionDetails } from "@/lib/types";
 
 const POLL_MS = 3000;
@@ -34,7 +35,10 @@ export default function ResultStatus() {
           const data: TransactionDetails = await res.json();
           if (cancelled) return;
           setTransaction(data);
-          if (data.status !== "Pending") return; // final: stop polling
+          if (data.status !== "Pending") {
+            clearIdempotencyKey(); // purchase finished: Go back or a new checkout starts with a new key
+            return; // final: stop polling
+          }
         }
       } catch {
         // network blip: try again on the next tick

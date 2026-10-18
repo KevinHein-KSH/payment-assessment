@@ -47,6 +47,13 @@ public class ApiFactory : WebApplicationFactory<Program>
         return tx;
     }
 
+    public async Task<int> CountByIdempotencyKeyAsync(string idempotencyKey)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.PaymentTransactions.CountAsync(t => t.IdempotencyKey == idempotencyKey);
+    }
+
     public async Task<PaymentTransaction> ReloadAsync(string invoiceNo)
     {
         using var scope = Services.CreateScope();

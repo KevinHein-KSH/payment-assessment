@@ -1,6 +1,8 @@
 using PaymentAssessment.Infrastructure.Payments.TwoC2P;
 using PaymentAssessment.Infrastructure.Persistence;
 using PaymentAssessment.Infrastructure.Caching;
+using PaymentAssessment.Application.Locking;
+using PaymentAssessment.Infrastructure.Locking;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
@@ -22,6 +24,7 @@ var redis = builder.Configuration.GetConnectionString("Redis")!;
 builder.Services.AddSingleton<IConnectionMultiplexer>(
     ConnectionMultiplexer.Connect($"{redis},abortConnect=false"));
 builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+builder.Services.AddSingleton<IDistributedLock, RedisDistributedLock>();
 builder.Services.AddScoped<ILookupRepository, LookupRepository>();
 builder.Services.AddScoped<LookupService>();
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
