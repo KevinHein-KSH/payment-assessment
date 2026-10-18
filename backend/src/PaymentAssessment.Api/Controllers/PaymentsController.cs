@@ -9,6 +9,9 @@ public class PaymentsController(NotificationService notifications) : ControllerB
 {
     /// <summary>The 2C2P backendReturnUrl (docs/05, Backend notification).</summary>
     [HttpPost("notification")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Notification(PaymentNotificationRequest request, CancellationToken ct)
     {
         var outcome = await notifications.HandleAsync(request.Payload, ct);

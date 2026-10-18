@@ -16,6 +16,8 @@ public class LookupsController(LookupService lookups) : ControllerBase
         => Ok(await lookups.GetProductsAsync(ct));
 
     [HttpGet("customers/{id:int}/cards")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IEnumerable<CustomerCardDto>>> GetCustomerCards(int id, CancellationToken ct)
     {
         var cards = await lookups.GetCustomerCardsAsync(id, ct);

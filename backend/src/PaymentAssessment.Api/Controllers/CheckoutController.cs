@@ -8,6 +8,10 @@ namespace PaymentAssessment.Api.Controllers;
 public class CheckoutController(CheckoutService checkout) : ControllerBase
 {
     [HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CheckoutResponse>> Checkout(
         [FromHeader(Name = "Idempotency-Key")] string idempotencyKey, // non-nullable → missing header = automatic 400
         CheckoutRequest request, CancellationToken ct)

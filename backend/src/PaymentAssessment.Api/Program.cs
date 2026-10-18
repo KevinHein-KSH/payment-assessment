@@ -1,3 +1,5 @@
+using Swashbuckle.AspNetCore.Filters;
+using PaymentAssessment.Api.Swagger;
 using PaymentAssessment.Infrastructure.Payments.TwoC2P;
 using PaymentAssessment.Infrastructure.Persistence;
 using PaymentAssessment.Infrastructure.Caching;
@@ -37,7 +39,12 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.ExampleFilters();
+    options.OperationFilter<IdempotencyKeyExampleFilter>();
+});
+builder.Services.AddSwaggerExamplesFromAssemblyOf<Program>(); // request/response examples in Swagger/SwaggerExamples.cs
 builder.Services.AddOptions<TwoC2POptions>()
                 .Bind(builder.Configuration.GetSection("TwoC2P"))
                 .ValidateDataAnnotations()
