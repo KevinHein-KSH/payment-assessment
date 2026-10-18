@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { TransactionDetails } from "@/lib/types";
 
 interface FailedResultProps {
@@ -12,12 +13,13 @@ export default function FailedResult({ transaction }: FailedResultProps) {
         <p className="text-gray-500">Reason</p>
         <p className="mt-1 text-gray-900">{transaction.respDesc ?? "Unknown error"}</p>
       </div>
-      <button
-        type="button"
-        className="mt-6 w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+      {/* A fresh Checkout page load means a new Idempotency-Key, so the retry is a new purchase attempt */}
+      <Link
+        href={`/?customerId=${transaction.customerId}&productId=${transaction.productId}`}
+        className="mt-6 block w-full rounded-md bg-blue-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-blue-700"
       >
         Go back
-      </button>
+      </Link>
     </div>
   );
 }

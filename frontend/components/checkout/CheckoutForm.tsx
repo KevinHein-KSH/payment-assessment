@@ -14,6 +14,9 @@ import PaymentSummary from "./PaymentSummary";
 interface CheckoutFormProps {
   customers: Customer[];
   products: Product[];
+  // From the URL; NaN or an unknown id falls back to the first entry
+  initialCustomerId?: number;
+  initialProductId?: number;
 }
 
 const selectClass =
@@ -22,9 +25,15 @@ const selectClass =
 export default function CheckoutForm({
   customers,
   products,
+  initialCustomerId,
+  initialProductId,
 }: CheckoutFormProps) {
-  const [customerId, setCustomerId] = useState(customers[0].id);
-  const [productId, setProductId] = useState(products[0].id);
+  const [customerId, setCustomerId] = useState(
+    customers.find((c) => c.id === initialCustomerId)?.id ?? customers[0].id,
+  );
+  const [productId, setProductId] = useState(
+    products.find((p) => p.id === initialProductId)?.id ?? products[0].id,
+  );
   const [cards, setCards] = useState<CustomerCard[]>([]);
   // null means "Pay with a new payment method"
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
