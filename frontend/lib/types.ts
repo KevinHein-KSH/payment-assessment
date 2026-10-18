@@ -1,4 +1,4 @@
-// Shapes mirror the API in docs/02-technical.md, so mock data can be swapped for fetch calls.
+// Shapes mirror the API in docs/02-technical.md.
 
 export type PaymentType = "OneTime" | "Recurring";
 

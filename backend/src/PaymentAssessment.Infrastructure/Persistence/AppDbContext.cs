@@ -36,7 +36,7 @@ public class AppDbContext : DbContext
             e.HasOne(c => c.Customer).WithMany().HasForeignKey(c => c.CustomerId).OnDelete(DeleteBehavior.Restrict);
         });
 
-        // Seeds go into the migration, so they are applied once and are repeat-safe; same data as frontend/lib/mock-data.ts
+        // Seeds go into the migration, so they are applied once and are repeat-safe
         b.Entity<Customer>().HasData(
             new Customer { Id = 1, FirstName = "Alice", LastName = "Tan", Email = "alice.tan@example.com" },
             new Customer { Id = 2, FirstName = "Ben", LastName = "Lim", Email = "ben.lim@example.com" },

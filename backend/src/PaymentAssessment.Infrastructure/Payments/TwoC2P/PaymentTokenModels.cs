@@ -36,4 +36,7 @@ public record NotificationPayload(
     [property: JsonPropertyName("channelCode")] string? ChannelCode,
     [property: JsonPropertyName("accountNo")] string? AccountNo,
     [property: JsonPropertyName("tranRef")] string? TranRef,
-    [property: JsonPropertyName("customerToken")] string? CustomerToken);
+    [property: JsonPropertyName("customerToken")] string? CustomerToken,
+    // Set when 2C2P settled in another currency: our requested amount/currency, e.g. 25.0 SGD settled as 605.88 THB
+    [property: JsonPropertyName("fxAmount"), JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? FxAmount = null,
+    [property: JsonPropertyName("fxCurrencyCode")] string? FxCurrencyCode = null);

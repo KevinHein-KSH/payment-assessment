@@ -1,4 +1,4 @@
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatPaymentChannel } from "@/lib/format";
 import type { TransactionDetails } from "@/lib/types";
 
 interface SucceededResultProps {
@@ -10,7 +10,7 @@ export default function SucceededResult({ transaction }: SucceededResultProps) {
     ["Product", transaction.productName],
     ["Amount", formatAmount(transaction.amount, transaction.currency)],
     ["Invoice number", transaction.invoiceNo],
-    ["Payment method", transaction.paymentChannel ?? "-"],
+    ["Payment method", formatPaymentChannel(transaction.paymentChannel)],
     ["Card / account", transaction.maskedCardNo ?? "-"],
   ];
 

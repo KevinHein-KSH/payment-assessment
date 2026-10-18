@@ -54,10 +54,12 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
             var json = await TwoC2PJwt.VerifyAndDecodeAsync(payload, _options.SecretKey);
             var p = JsonSerializer.Deserialize<NotificationPayload>(json)
                 ?? throw new InvalidOperationException("2C2P payload could not be read");
+            // Report what we requested, not what 2C2P settled in: the sandbox converts SGD to THB and keeps our SGD in fx*
+            var converted = !string.IsNullOrEmpty(p.FxCurrencyCode) && p.FxAmount is not null;
             return new PaymentNotification(
                 InvoiceNo: p.InvoiceNo,
-                Amount: p.Amount,
-                CurrencyCode: p.CurrencyCode,
+                Amount: converted ? p.FxAmount!.Value : p.Amount,
+                CurrencyCode: converted ? p.FxCurrencyCode! : p.CurrencyCode,
                 RespCode: p.RespCode,
                 RespDesc: p.RespDesc,
                 ChannelCode: p.ChannelCode,

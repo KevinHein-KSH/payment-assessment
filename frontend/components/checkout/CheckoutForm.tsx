@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { Customer, CustomerCard, Product } from "@/lib/types";
+import type {
+  CheckoutRequest,
+  CheckoutResponse,
+  Customer,
+  CustomerCard,
+  Product,
+} from "@/lib/types";
 import PaymentMethodOptions from "./PaymentMethodOptions";
 import PaymentSummary from "./PaymentSummary";
 
@@ -22,9 +28,37 @@ export default function CheckoutForm({
   const [cards, setCards] = useState<CustomerCard[]>([]);
   // null means "Pay with a new payment method"
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
+  // shortcut: one key per page load; Phase 4 (F1) keeps it in sessionStorage so a refresh reuses it
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const customer = customers.find((c) => c.id === customerId) ?? customers[0];
   const product = products.find((p) => p.id === productId) ?? products[0];
+
+  async function handleCheckout() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const body: CheckoutRequest = {
+        customerId,
+        productId,
+        customerCardId: selectedCardId ?? undefined,
+      };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`Checkout returned ${res.status}`);
+      const data: CheckoutResponse = await res.json();
+      // Hosted page (or 3DS later); null means go straight to our Result page. Button stays disabled while leaving.
+      window.location.href = data.redirectUrl ?? `/result/${data.invoiceNo}`;
+    } catch {
+      setError("Checkout failed. Please try again.");
+      setSubmitting(false);
+    }
+  }
 
   function handleCustomerChange(id: number) {
     setCustomerId(id);
@@ -84,25 +118,20 @@ export default function CheckoutForm({
         onChange={setSelectedCardId}
       />
 
+      {error && (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
+        </p>
+      )}
+
       <button
         type="button"
-        className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+        onClick={handleCheckout}
+        disabled={submitting}
+        className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
       >
-        Checkout
+        {submitting ? "Processing..." : "Checkout"}
       </button>
-
-      <div className="rounded-md border border-dashed border-gray-300 p-4">
-        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500">
-          Preview: disabled state while the request is in flight
-        </p>
-        <button
-          type="button"
-          disabled
-          className="w-full cursor-not-allowed rounded-md bg-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600"
-        >
-          Processing...
-        </button>
-      </div>
     </div>
   );
 }

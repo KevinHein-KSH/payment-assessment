@@ -46,6 +46,46 @@ public class NotificationTests(ApiFactory factory)
         Assert.NotNull(saved.PaidAt);
     }
 
+    // Shape captured from a real sandbox notification (2026-10-18): settled in THB, our SGD request in fx*
+    private static object ConvertedPayload(string invoiceNo, decimal fxAmount) => new
+    {
+        merchantID = "JT01",
+        invoiceNo,
+        accountNo = "411111XXXXXX1111",
+        amount = 605.88m,
+        currencyCode = "THB",
+        fxAmount,
+        fxCurrencyCode = "SGD",
+        fxRate = 24.2354868m,
+        tranRef = "15707541",
+        channelCode = "VI",
+        customerToken = "",
+        respCode = "0000",
+        respDesc = "Success"
+    };
+
+    [Fact]
+    public async Task Converted_notification_is_checked_against_the_requested_currency()
+    {
+        var tx = await factory.SeedPendingAsync(amount: 25.00m);
+
+        var res = await _client.PostAsJsonAsync(Url, ApiFactory.NotificationBody(ConvertedPayload(tx.InvoiceNo, fxAmount: 25.0m)));
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal(TransactionStatus.Succeeded, (await factory.ReloadAsync(tx.InvoiceNo)).Status);
+    }
+
+    [Fact]
+    public async Task Converted_notification_with_wrong_requested_amount_is_rejected()
+    {
+        var tx = await factory.SeedPendingAsync(amount: 25.00m);
+
+        var res = await _client.PostAsJsonAsync(Url, ApiFactory.NotificationBody(ConvertedPayload(tx.InvoiceNo, fxAmount: 1.0m)));
+
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Equal(TransactionStatus.Pending, (await factory.ReloadAsync(tx.InvoiceNo)).Status);
+    }
+
     [Fact]
     public async Task Failure_notification_marks_transaction_failed_with_reason()
     {
