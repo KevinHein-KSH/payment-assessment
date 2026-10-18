@@ -68,7 +68,7 @@ public class CheckoutService
 
         var result = await PaymentProvider.CreatePaymentTokenAsync(invoiceNo, product.Name, product.Price, product.Currency, ct);
 
-        if (result.RespCode == "0000")
+        if (result.Succeeded)
         {
             await TransactionRepository.SetPaymentTokenAsync(transaction.Id, result.PaymentToken!, result.RedirectUrl!, ct);
             return new CheckoutResult(CheckoutOutcome.Ok, new CheckoutResponse(invoiceNo, TransactionStatus.Pending, result.RedirectUrl));
@@ -95,20 +95,21 @@ public class CheckoutService
     {
         var answer = await PaymentProvider.InquireAsync(transaction.InvoiceNo, ct);
 
-        switch (answer.RespCode)
+        switch (answer.Status)
         {
-            case "0000" when answer.Amount == transaction.Amount && answer.CurrencyCode == transaction.Currency:
+            case PaymentStatus.Succeeded when answer.Amount == transaction.Amount && answer.CurrencyCode == transaction.Currency:
                 await TransactionRepository.MarkSucceededAsync(transaction.InvoiceNo, answer.ChannelCode,
                     answer.AccountNo, answer.TranRef, DateTime.UtcNow, ct);
                 break;
-            case "0000":
+            case PaymentStatus.Succeeded:
                 // Paid, but not the amount we stored: same rule as a notification, don't mark it; leave Pending for review
                 break;
-            case "0001" or "2001":
-                // Still in progress at 2C2P: stay Pending, the Result page keeps polling
+            case PaymentStatus.Pending:
+                // Still in progress at the provider: stay Pending, the Result page keeps polling
                 break;
-            default:
-                // Declined, cancelled, expired, or "2002" not found: the customer never got a payment link, nothing was charged
+            case PaymentStatus.Failed:
+            case PaymentStatus.NotFound:
+                // Declined, cancelled or expired, or never received: the customer never got a payment link, nothing was charged
                 await TransactionRepository.MarkFailedAsync(transaction.InvoiceNo, answer.RespCode, answer.RespDesc, ct);
                 break;
         }

@@ -12,7 +12,7 @@ public interface IPaymentProvider
 
     /// <summary>
     /// Payment Inquiry: the provider's current answer for an invoice, in the same shape as a verified notification
-    /// (docs/05: treat the inquiry result like a notification). Not found comes back as RespCode "2002" with Amount 0.
+    /// (docs/05: treat the inquiry result like a notification). Not found comes back as PaymentStatus.NotFound with Amount 0.
     /// </summary>
     Task<PaymentNotification> InquireAsync(string invoiceNo, CancellationToken ct);
 }

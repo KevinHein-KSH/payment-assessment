@@ -22,7 +22,7 @@ public class FakePaymentProvider : IPaymentProvider
     {
         Interlocked.Increment(ref _tokenCalls);
         await Task.Delay(300, ct); // a slow 2C2P keeps parallel requests overlapping
-        return new PaymentTokenResult("0000", "Success", $"fake-token-{invoiceNo}", $"https://pay.example/{invoiceNo}");
+        return new PaymentTokenResult(true, "0000", "Success", $"fake-token-{invoiceNo}", $"https://pay.example/{invoiceNo}");
     }
 
     public Task<PaymentNotification?> VerifyNotificationAsync(string payload, CancellationToken ct)
@@ -31,7 +31,7 @@ public class FakePaymentProvider : IPaymentProvider
     public Task<PaymentNotification> InquireAsync(string invoiceNo, CancellationToken ct)
         => Task.FromResult(InquiryResults.TryGetValue(invoiceNo, out var result)
             ? result
-            : new PaymentNotification(invoiceNo, 0m, "", "2002", "Transaction not found.", null, null, null, null));
+            : new PaymentNotification(invoiceNo, PaymentStatus.NotFound, 0m, "", "2002", "Transaction not found.", null, null, null, null));
 }
 
 /// <summary>The real API with IPaymentProvider swapped for <see cref="FakePaymentProvider"/>.</summary>

@@ -102,6 +102,18 @@ public class NotificationTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task In_progress_notification_keeps_transaction_pending()
+    {
+        var tx = await factory.SeedPendingAsync();
+
+        var res = await _client.PostAsJsonAsync(Url,
+            ApiFactory.NotificationBody(Payload(tx.InvoiceNo, respCode: "2001", respDesc: "Transaction in progress")));
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal(TransactionStatus.Pending, (await factory.ReloadAsync(tx.InvoiceNo)).Status);
+    }
+
+    [Fact]
     public async Task Notification_with_bad_signature_is_rejected()
     {
         var tx = await factory.SeedPendingAsync();

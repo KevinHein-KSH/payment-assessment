@@ -33,6 +33,7 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
         if (envelope.Payload is null)
         {
             return new PaymentTokenResult(
+                Succeeded: false,
                 RespCode: envelope.RespCode ?? "",
                 RespDesc: envelope.RespDesc ?? "",
                 PaymentToken: null,
@@ -43,8 +44,7 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
         var decodedJson = await TwoC2PJwt.VerifyAndDecodeAsync(envelope.Payload, _options.SecretKey);
         var r = JsonSerializer.Deserialize<PaymentTokenResponse>(decodedJson)
                 ?? throw new InvalidOperationException("2C2P payload could not be read");
-        return new PaymentTokenResult(r.RespCode, r.RespDesc, r.PaymentToken, r.WebPaymentUrl);
-
+        return new PaymentTokenResult(r.RespCode == "0000", r.RespCode, r.RespDesc, r.PaymentToken, r.WebPaymentUrl);
     }
 
     public async Task<PaymentNotification?> VerifyNotificationAsync(string payload, CancellationToken ct)
@@ -74,7 +74,8 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
             ?? throw new InvalidOperationException("2C2P returned an empty response");
 
         if (envelope.Payload is null)
-            return new PaymentNotification(invoiceNo, 0m, "", envelope.RespCode ?? "", envelope.RespDesc ?? "", null, null, null, null);
+            return new PaymentNotification(invoiceNo, ToStatus(envelope.RespCode ?? ""), 0m, "",
+                envelope.RespCode ?? "", envelope.RespDesc ?? "", null, null, null, null);
 
         // Our own outbound call: a bad signature here is an error, so let VerifyAndDecodeAsync throw
         var decodedJson = await TwoC2PJwt.VerifyAndDecodeAsync(envelope.Payload, _options.SecretKey);
@@ -91,6 +92,7 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
         var converted = !string.IsNullOrEmpty(p.FxCurrencyCode) && p.FxAmount is not null;
         return new PaymentNotification(
             InvoiceNo: p.InvoiceNo ?? invoiceNo,
+            Status: ToStatus(p.RespCode),
             Amount: converted ? p.FxAmount!.Value : p.Amount,
             CurrencyCode: converted ? p.FxCurrencyCode! : p.CurrencyCode ?? "",
             RespCode: p.RespCode,
@@ -100,4 +102,13 @@ public class TwoC2PPaymentProvider(HttpClient http, IOptions<TwoC2POptions> opti
             TranRef: p.TranRef,
             CustomerToken: p.CustomerToken);
     }
+
+    // The only place that knows 2C2P response codes (docs/05 "Response codes" and the interrupted-request table)
+    private static PaymentStatus ToStatus(string respCode) => respCode switch
+    {
+        "0000" => PaymentStatus.Succeeded,
+        "0001" or "2001" => PaymentStatus.Pending,
+        "2002" or "4071" or "4140" => PaymentStatus.NotFound,
+        _ => PaymentStatus.Failed
+    };
 }

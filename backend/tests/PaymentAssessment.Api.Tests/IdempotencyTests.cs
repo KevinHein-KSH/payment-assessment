@@ -65,16 +65,17 @@ public class IdempotencyTests(FakeProviderApiFactory factory)
 
     // docs/05 "Interrupted request": a row without redirect_url is resolved with Payment Inquiry, never a second Payment Token
     [Theory]
-    [InlineData("0000", "Success", TransactionStatus.Succeeded)]
-    [InlineData("4001", "Refer to cared issuer", TransactionStatus.Failed)]
-    [InlineData("2002", "Transaction not found.", TransactionStatus.Failed)]
-    [InlineData("2001", "Transaction in progress", TransactionStatus.Pending)]
-    public async Task Interrupted_checkout_is_resolved_with_payment_inquiry(string respCode, string respDesc, TransactionStatus expected)
+    [InlineData(PaymentStatus.Succeeded, "0000", "Success", TransactionStatus.Succeeded)]
+    [InlineData(PaymentStatus.Failed, "4001", "Refer to cared issuer", TransactionStatus.Failed)]
+    [InlineData(PaymentStatus.NotFound, "2002", "Transaction not found.", TransactionStatus.Failed)]
+    [InlineData(PaymentStatus.Pending, "2001", "Transaction in progress", TransactionStatus.Pending)]
+    public async Task Interrupted_checkout_is_resolved_with_payment_inquiry(
+        PaymentStatus providerStatus, string respCode, string respDesc, TransactionStatus expected)
     {
         var tx = await factory.SeedPendingAsync(amount: 25.00m); // Pending, no redirect_url: 2C2P's answer was never saved
-        if (respCode != "2002")
+        if (providerStatus != PaymentStatus.NotFound)
             Provider.InquiryResults[tx.InvoiceNo] = new PaymentNotification(
-                tx.InvoiceNo, 25.00m, "SGD", respCode, respDesc, "VI", "411111XXXXXX1111", "15707541", "");
+                tx.InvoiceNo, providerStatus, 25.00m, "SGD", respCode, respDesc, "VI", "411111XXXXXX1111", "15707541", "");
         var callsBefore = Provider.TokenCalls;
 
         var res = await CheckoutAsync(tx.IdempotencyKey);
