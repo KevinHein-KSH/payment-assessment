@@ -3,13 +3,13 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Restore first so the package layer is cached until a project file changes
-COPY PaymentAssessment.sln ./
+# Restore first so the package layer is cached until a project file changes.
+# The Api project, not the .sln: the .sln also lists the test project, which the image doesn't need.
 COPY src/PaymentAssessment.Domain/PaymentAssessment.Domain.csproj src/PaymentAssessment.Domain/
 COPY src/PaymentAssessment.Application/PaymentAssessment.Application.csproj src/PaymentAssessment.Application/
 COPY src/PaymentAssessment.Infrastructure/PaymentAssessment.Infrastructure.csproj src/PaymentAssessment.Infrastructure/
 COPY src/PaymentAssessment.Api/PaymentAssessment.Api.csproj src/PaymentAssessment.Api/
-RUN dotnet restore PaymentAssessment.sln
+RUN dotnet restore src/PaymentAssessment.Api/PaymentAssessment.Api.csproj
 
 COPY . .
 RUN dotnet publish src/PaymentAssessment.Api/PaymentAssessment.Api.csproj -c Release -o /app/publish --no-restore

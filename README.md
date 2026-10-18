@@ -93,7 +93,8 @@ dotnet run --launch-profile http
 Either way:
 
 - API: http://localhost:5080
-- Swagger UI: http://localhost:5080/swagger (Development environment only)
+- Swagger UI: http://localhost:5080/swagger (Development environment only), with request and
+  response examples for every endpoint (`Swagger/SwaggerExamples.cs`)
 - Migrations and seed data are applied automatically on startup.
 
 **Frontend:**
@@ -271,6 +272,24 @@ All 2C2P details (JWT signing, field names, response codes, currency handling) l
 - **Money** is `DECIMAL(12,2)`. No card number, CVV or expiry is ever stored; only masked numbers
   and 2C2P customer tokens.
 
+## Verification status
+
+Every flow below is implemented; nothing is left as a scaffold. "Sandbox" means a real run against
+the 2C2P sandbox (merchant `JT01`, Oct 18, 2026); "test" means the automated tests.
+
+| Flow | Verified by |
+|---|---|
+| OneTime payment, hosted page | Sandbox: Succeeded from the backend notification |
+| Recurring payment that saves a card | Sandbox: card saved once and listed for that customer; a replayed notification added no second card |
+| Saved-card payment | Sandbox: Do Payment `2000` → Inquiry `0000` → Succeeded; a retry with the same key made no 2C2P call |
+| Saved-card 3DS (`1001`) | Test only: with `request3DS: "N"` the sandbox returned `2000` |
+| Declined card, Go back, retry | Sandbox: `4001` → Failed → retry with a new key → Succeeded |
+| Cancel on the hosted page | Sandbox: no notification arrives; Inquiry `0003` → Failed |
+| Concurrent checkouts with one key | Test: 10 parallel requests → 1 row, 1 2C2P call. Sandbox: 5 parallel requests → 1×200, 4×409, then replay |
+| Interrupted request recovery | Test, plus a sandbox Inquiry for an unpaid invoice (`2002`) |
+| Another customer's saved card | Sandbox and test: 404, nothing written |
+| Redis down | Not tested; by design the unique index still prevents duplicate rows (see below) |
+
 ## Known limitations
 
 - **Redis down:** checkouts continue without the lock and the unique index prevents duplicate
@@ -281,3 +300,12 @@ All 2C2P details (JWT signing, field names, response codes, currency handling) l
 - **A second payment provider** would need a `provider` column on `transaction`, so notifications
   and Inquiry reach the right provider, plus provider selection (keyed services or a small
   factory). The interfaces and neutral types are already in place.
+
+## What I'd improve with more time
+
+- Throttle the Result-page Inquiry per invoice instead of one call per poll.
+- Test the 2C2P adapter itself against recorded sandbox payloads (a stub `HttpMessageHandler`); today
+  the tests swap the whole provider for a fake, and the adapter is covered by sandbox runs.
+- Run the tests on Testcontainers instead of the dev database, so test rows don't mix with demo data.
+- Verify saved-card 3DS with a 3DS-enrolled test card, and test the Redis-down path.
+- Add the `provider` column and provider selection described above.
