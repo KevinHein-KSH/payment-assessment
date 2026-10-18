@@ -79,12 +79,13 @@ Then set in `appsettings.Development.json` under `TwoC2P`:
 **Option A: everything in Docker.** API, MySQL and Redis:
 
 ```bash
-docker compose up
+docker compose up --build
 ```
 
 **Option B: API from source** (what we use while developing):
 
 ```bash
+docker compose stop api   # if Option A ran before: both use port 5080
 docker compose up -d mysql redis
 cd backend/src/PaymentAssessment.Api
 dotnet run --launch-profile http
@@ -107,6 +108,17 @@ npm run dev
 ```
 
 - http://localhost:3000
+
+**Reset data** (removes all transactions and saved cards; customers and products are seeded
+again on the next start):
+
+```bash
+docker compose down -v      # deletes the MySQL volume; Redis has no volume
+docker compose up -d mysql redis
+```
+
+Then restart the API and open the frontend in a new tab, so no old `Idempotency-Key` is reused
+from `sessionStorage`. The tests write to this same database, so reset after running them.
 
 ## Using the app
 
